@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Sugi Planner">
+    <meta name="theme-color" content="#fbcfe8">
+    
+    <link rel="manifest" href="/manifest.json">
+    
+    <link rel="apple-touch-icon" href="https://placehold.co/180x180/f0abfc/7e22ce?text=👑"> 
+    <link rel="icon" href="https://placehold.co/192x192/f0abfc/7e22ce?text=👑">
+
+    <title>Sugi's Personalized Planner</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+    <script src='https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js'></script>
+    <script src='https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js'></script>
+    <script src='https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js'></script>
+
+
+    <style>
+        /* Font Imports & Tailwind Config */
+        @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700;1,400&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        
+        .font-stylish {
+            font-family: 'Lora', serif;
+        }
+        .font-readable {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Animations */
+        @keyframes float {
+            0% { transform: translate(0, 0) rotate(0deg); opacity: 0.8; }
+            50% { transform: translate(15px, -15px) rotate(5deg); opacity: 0.5; }
+            100% { transform: translate(0, 0) rotate(0deg); opacity: 0.8; }
+        }
+        @keyframes wobble {
+            0%, 100% { transform: translateX(0); }
+            15% { transform: translateX(-5px); }
+            30% { transform: translateX(5px); }
+            45% { transform: translateX(-3px); }
+            60% { transform: translateX(3px); }
+            75% { transform: translateX(-1px); }
+        }
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(-3deg); }
+            50% { transform: rotate(3deg); }
+        }
+        @keyframes bounce-slow {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        @keyframes pop-in {
+            0% { opacity: 0; transform: scale(0.5); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes confetti-fall {
+            0% { opacity: 1; transform: translateY(-10px) rotate(0deg); }
+            100% { opacity: 0; transform: translateY(100vh) rotate(360deg); }
+        }
+        
+        .animate-float { animation: float 8s ease-in-out infinite; }
+        .animate-wobble { animation: wobble 1s ease-in-out infinite; }
+        .animate-wiggle { animation: wiggle 0.5s ease-in-out infinite; }
+        .animate-bounce-slow { animation: bounce-slow 1.5s ease-in-out infinite; }
+        .animate-pop-in { animation: pop-in 0.3s ease-out; }
+        .animate-confetti-fall { animation: confetti-fall 2s ease-in forwards; }
+
+        /* Ensure smooth full height on mobile browsers */
+        html, body, #root {
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- GLOBAL CONFIGURATION & DATA ---
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
+        
+        const appId = 'sugis-planner'; // Hardcoded project ID for the app logic
+
+        // =========================================================================
+        // !!! FIREBASE CONFIGURATION - COPIED DIRECTLY FROM YOUR IMAGE !!!
+        // =========================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBwx2OlPmrL1184wYU4se11N0lNZ8Vjy0g", 
+            authDomain: "sugi-planner-app.firebaseapp.com",
+            projectId: "sugi-planner-app",
+            storageBucket: "sugi-planner-app.firebasestorage.app", // Corrected storage path for consistency
+            messagingSenderId: "328620977479",
+            appId: "1:328620977479:web:eca3a23f03d6af4bc77062",
+            measurementId: "G-RG65QF8TP"
+        };
+        // NOTE: The measurementId is optional for function but useful for analytics.
+        // =========================================================================
+
+        
+        const AVATAR_OPTIONS = [
+            { id: 'cat-pink', emoji: '🐱', name: 'Lovely', expression: 'cute' },
+            { id: 'cat-blush', emoji: '😽', name: 'Blushing Cat', expression: 'shy' },
+            { id: 'bear-pink', emoji: '🐻', name: 'Baby', expression: 'happy' },
+            { id: 'bear-panda', emoji: '🐼', name: 'Chill Panda', expression: 'Sugi' },
+            { id: 'ghost-cute', emoji: '👻', name: 'Lil Ghost', expression: 'playful' },
+            { id: 'devil-angry', emoji: '😈', name: 'Lil Devil ', expression: 'Ninnu' },
+            { id: 'human-boy', emoji: '🧑‍💻', name: 'Dev Partner', expression: 'focused' },
+            { id: 'done-check', emoji: '✅', name: 'Done Buddy', expression: 'satisfied' },
+            { id: 'sad-cry', emoji: '😭', name: 'Teary', expression: 'sad' },
+            { id: 'motivator-bear', emoji: '💪', name: 'The Motivator', expression: 'strong' },
+            { id: 'sleepy', emoji: '😴', name: 'Sleepyhead', expression: 'tired' },
+        ];
+
+        const SPECIAL_AVATARS = {
+            PARTY_POPPER: '🎊', 
+            BIRTHDAY_HIM: '👑',
+            BIRTHDAY_ME: '🎂',
+            ANNIVERSARY: '💍',
+            CARE_DAY_ME: '🩸',
+            CARE_DAY_OVULATION: '🧑‍🍼',
+            CARE_DAY_HIM: '🤵‍♂️',
+            KISS: '💋',
+            STREAK_HINT: '🔥',
+            CALENDAR: '🗓️',
+            SETTINGS: '⚙️',
+            PLUS: '➕', 
+            X: '✖️',
+            HEART: '❤️',
+            USER_CHECK: '✅',
+            GEM: '💎',
+            CODE: '💻',
+            FLAME: '🔥',
+            CHECK: '✔️',
+            CHEVRON_LEFT: '‹',
+            CHEVRON_RIGHT: '›',
+        };
+
+        const MONTHLY_STICKERS = [
+            '⭐', '💖', '✨', '🎈', '🍰', '🌸', 
+            '🍉', '🏝️', '📚', '🎃', '🍂', '🎁' 
+        ];
+
+        const SUGI_BIRTHDAY_DATE = { month: 9, date: 20, year: 2025, name: "Sugi's Birthday" }; 
+
+        const HOLIDAYS = [
+            { month: 0, date: 1, name: 'New Year Day' },
+            { month: 0, date: 15, name: 'Makara Sankranti' },
+            { month: 0, date: 26, name: 'Republic Day' },
+            { month: 2, date: 8, name: 'Maha Shivaratri' },
+            { month: 2, date: 25, name: 'Holi' },
+            { month: 3, date: 1, name: 'Ugadi/Gudi Padwa' },
+            { month: 3, date: 17, name: 'Ram Navami' },
+            { month: 4, date: 1, name: 'May Day' },
+            { month: 7, date: 15, name: 'Independence Day' },
+            { month: 9, date: 2, name: 'Gandhi Jayanti' },
+            { month: 9, date: 12, name: 'Dussehra' },
+            { month: 9, date: 20, name: 'Diwali' }, 
+            { month: 10, date: 1, name: 'Govardhan Puja' },
+            { month: 11, date: 25, name: 'Christmas Day' },
+        ];
+
+        const PERSONAL_DATES = [
+            { month: 9, date: 7, year: 2024, name: 'Ninnu’s Birthday' },
+            SUGI_BIRTHDAY_DATE,
+            { month: 11, date: 7, year: 2023, name: 'Anniversary' },
+            { month: 10, date: 13, year: 2024, name: 'First Kiss' },
+        ];
+
+        const MOTIVATIONAL_QUOTES = [
+            "You got this, Handsome! Believe in your hustle.",
+            "Persistence is the key to all doors. Keep that code streak alive!",
+            "Take a deep breath. A clear mind solves the toughest bugs. Love, Ninnu.",
+            "Remember how far you've come. Every small step is a victory!",
+            "Today is a new commit in the repository of your life. Make it a good one!",
+            "You are stronger than you think. Now go conquer that task!",
+            "Don't wait for inspiration. Be the inspiration!",
+            "I'm your biggest fan! Go build something amazing, my love.",
+            "Self-care is non-negotiable. Don't forget to take a break.",
+        ];
+
+        // --- HELPER FUNCTIONS ---
+        const formatDay = (date) => date.getDate().toString().padStart(2, '0');
+        const formatMonthYear = (date) => date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        const formatDateKey = (date) => `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+        const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+        const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
+        const getToday = () => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Normalize time for accurate comparison
+            return today;
+        };
+        const getInitialSelectedDate = () => getToday(); 
+
+        const isTodayASpecialDate = (date) => {
+            const today = getToday();
+            // Check for Sugi's birthday (year-independent)
+            if (today.getMonth() === SUGI_BIRTHDAY_DATE.month && today.getDate() === SUGI_BIRTHDAY_DATE.date) {
+                return { type: 'sugi_bday', name: SUGI_BIRTHDAY_DATE.name };
+            }
+            // Check for all other personal dates (year-independent, for recurring events)
+            const specialDate = PERSONAL_DATES.find(d => 
+                d.month === today.getMonth() && 
+                d.date === today.getDate() &&
+                d.name !== SUGI_BIRTHDAY_DATE.name
+            );
+            if (specialDate) {
+                return { type: specialDate.name.toLowerCase().replace(/[^a-z]/g, '_'), name: specialDate.name };
+            }
+
+            return null;
+        }
+
+        const generateConfetti = (count = 10, target) => {
+            const confettiColors = ['#f7e8ed', '#ead7e7', '#d9a9c2', '#a05282', '#ffb6c1', '#ffeb3b']; 
+            
+            for (let i = 0; i < count; i++) {
+                const isSparkle = i % 3 === 0;
+                const particle = document.createElement('div');
+                
+                // Base style
+                particle.style.position = 'fixed';
+                particle.style.width = isSparkle ? '8px' : '6px';
+                particle.style.height = isSparkle ? '8px' : '6px';
+                particle.style.backgroundColor = isSparkle ? '#ffeb3b' : confettiColors[Math.floor(Math.random() * confettiColors.length)];
+                particle.style.borderRadius = isSparkle ? '0' : '50%';
+                particle.style.zIndex = '10000';
+                
+                // Initial random position (mostly from the center of the screen/target area)
+                const startX = target ? target.getBoundingClientRect().left + target.offsetWidth / 2 : window.innerWidth / 2;
+                const startY = target ? target.getBoundingClientRect().top + target.offsetHeight / 2 : window.innerHeight / 2;
+                particle.style.left = `${startX + (Math.random() - 0.5) * 50}px`;
+                particle.style.top = `${startY + (Math.random() - 0.5) * 50}px`;
+                particle.style.opacity = '1';
+
+                // Randomize trajectory
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = Math.random() * 8 + 5;
+                const endX = Math.cos(angle) * velocity * 50; // Spread horizontally
+                const endY = Math.random() * window.innerHeight + 50; // Fall down
+
+                particle.style.transition = 'transform 2s ease-out, opacity 1.8s ease-out';
+                
+                document.body.appendChild(particle);
+
+                // Start animation
+                setTimeout(() => {
+                    particle.style.transform = `translate(${endX}px, ${endY}px) rotate(${Math.random() * 720}deg)`;
+                    particle.style.opacity = '0';
+                }, 10);
+                setTimeout(() => {
+                    particle.remove();
+                }, 2000);
+            }
+        };
+
+        // --- COMPONENTS ---
+
+        const ConfettiOnSuccess = ({ show }) => {
+            const confettiRef = useRef(null);
+
+            useEffect(() => {
+                if (show) {
+                    const tempLaunchPoint = document.createElement('div');
+                    tempLaunchPoint.style.position = 'fixed';
+                    tempLaunchPoint.style.top = '50%';
+                    tempLaunchPoint.style.left = '50%';
+                    tempLaunchPoint.style.width = '1px';
+                    tempLaunchPoint.style.height = '1px';
+                    document.body.appendChild(tempLaunchPoint);
+                    
+                    generateConfetti(50, tempLaunchPoint);
+
+                    setTimeout(() => tempLaunchPoint.remove(), 10); 
+                }
+            }, [show]);
+
+            return null;
+        };
+
+        const LoadingScreen = ({ loading, error, children }) => {
+            if (loading) {
+                return (
+                    <div className="flex flex-col items-center justify-center min-h-screen bg-pink-50 text-purple-700">
+                        <p className="text-3xl font-bold font-stylish">Initializing SUGI'S PLANNER...</p>
+                        <div className="w-16 h-16 border-4 border-t-4 border-t-purple-500 border-pink-300 rounded-full animate-spin mt-4"></div>
+                    </div>
+                );
+            }
+            if (error) {
+                return (
+                    <div className="flex flex-col items-center justify-center min-h-screen bg-red-100 text-red-700 p-8">
+                        <p className="text-xl font-bold font-stylish mb-4">Error Connecting to Firestore</p>
+                        <p className="text-sm break-words">{error}</p>
+                        <p className="mt-4">Please check your Firebase configuration or ensure you have **enabled permissions (Security Rules)**.</p>
+                    </div>
+                );
+            }
+            return children;
+        };
+        
+        const DailyGreeting = ({ onContinue, specialDateInfo }) => {
+            const defaultQuote = "Hello, Sweetheart! This is Ninnu's daily planner for you. Let's see your schedule and plan a great day!";
+            
+            let quote = defaultQuote;
+            let title = "SUGI'S Planner Says:";
+            let emoji = AVATAR_OPTIONS.find(a => a.id === 'human-boy').emoji;
+
+            if (specialDateInfo) {
+                switch (specialDateInfo.type) {
+                    case 'ninnu_s_birthday':
+                        title = `Happy Birthday, Handsome!`;
+                        quote = "It's Ninnu's Birthday! My wish is simple: spend today making memories. Extra cuddles for you, Sweetheart! Ummah!";
+                        emoji = SPECIAL_AVATARS.BIRTHDAY_ME;
+                        break;
+                    case 'anniversary':
+                        title = `Happy Anniversary, My Love!`;
+                        quote = "Cheers to our journey! Every moment with you is a treasure. Let's make today special, my Handsome!";
+                        emoji = SPECIAL_AVATARS.ANNIVERSARY;
+                        break;
+                    case 'first_kiss':
+                        title = `Our First Kiss Anniversary!`;
+                        quote = "Today marks the anniversary of our first kiss! My heart still flips. Let's relive that magic. Love you!";
+                        emoji = SPECIAL_AVATARS.KISS;
+                        break;
+                    default:
+                        break;
+                }
+            } else {
+                 quote = MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
+            }
+
+
+            return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-pink-100 p-4 relative overflow-hidden">
+                    <ConfettiOnSuccess show={!!specialDateInfo} /> 
+                    <div className="absolute top-0 left-0 w-full h-full bg-repeat opacity-20" style={{ backgroundImage: "url(https://placehold.co/100x100/f7e8ed/d9a9c2?text=Sugi)", backgroundSize: '50px' }}></div>
+
+                    <div className="z-10 bg-white/90 backdrop-blur-sm p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center border-4 border-pink-300 animate-pop-in">
+                        <div className="text-8xl mb-4 animate-bounce-slow">
+                            {emoji}
+                        </div>
+                        <h1 className="text-3xl font-extrabold text-pink-700 font-stylish mb-4">{title}</h1>
+                        <div className="bg-purple-50 p-4 rounded-xl mb-6 border border-purple-300 shadow-inner">
+                            <p className="text-lg text-purple-800 font-readable leading-relaxed italic">
+                                {quote}
+                            </p>
+                        </div>
+                        <button
+                            onClick={onContinue}
+                            className="w-full bg-pink-600 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-pink-700 transition transform hover:scale-105 active:scale-95 text-2xl font-stylish tracking-wider"
+                        >
+                            Ummah! See the Planner
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+
+        const SugiBirthdayScreen = ({ onContinue }) => {
+            const confettiRef = useRef(null);
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    if (confettiRef.current) {
+                        generateConfetti(30, confettiRef.current);
+                    }
+                }, 500);
+
+                return () => clearInterval(interval);
+            }, []);
+
+            return (
+                <div ref={confettiRef} className="min-h-screen flex flex-col items-center justify-center bg-yellow-100 p-4 relative overflow-hidden">
+                    <div className="z-10 bg-white/90 backdrop-blur-sm p-10 rounded-3xl shadow-2xl max-w-lg w-full text-center border-4 border-red-500 animate-pop-in transform scale-105">
+                        <div className="text-9xl mb-6 animate-pulse-slow">
+                            {SPECIAL_AVATARS.PARTY_POPPER} {SPECIAL_AVATARS.BIRTHDAY_HIM} {SPECIAL_AVATARS.PARTY_POPPER}
+                        </div>
+                        <h1 className="text-5xl font-extrabold text-red-600 font-stylish mb-4">
+                            HAPPY BIRTHDAY, MY HANDSOME!
+                        </h1>
+                        <p className="text-xl text-purple-800 font-readable leading-relaxed italic mb-6">
+                            "This planner is just a little token to remind you that every day with you is a critical commit to my life's repository. Love you, Handsome!"
+                        </p>
+                        <button
+                            onClick={onContinue}
+                            className="w-full bg-red-500 text-white font-bold py-4 rounded-xl shadow-xl hover:bg-red-600 transition transform hover:scale-105 active:scale-95 text-3xl font-stylish tracking-wider flex items-center justify-center gap-2"
+                        >
+                            <span className="text-3xl">{SPECIAL_AVATARS.GEM}</span> Start Your Epic Year
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const TaskModal = ({ isVisible, onClose, onSave, selectedDate, userId, db, tasksCollectionPath }) => {
+            const [taskName, setTaskName] = useState('');
+            const [note, setNote] = useState('');
+            const [isSaving, setIsSaving] = useState(false);
+            const [isCareDayOptionsVisible, setIsCareDayOptionsVisible] = useState(false);
+
+            useEffect(() => {
+                if (!isVisible) {
+                    setTaskName('');
+                    setNote('');
+                    setIsCareDayOptionsVisible(false);
+                }
+            }, [isVisible]);
+
+            const handleSaveTask = async (isStreakTask = false) => {
+                if (!taskName.trim() && !isStreakTask) return;
+                
+                const finalTaskName = isStreakTask ? `Coding Streak: Commit to the repo! ${SPECIAL_AVATARS.STREAK_HINT}` : taskName.trim();
+                const finalPetName = 'Handsome';
+                const finalNote = isStreakTask ? 'A quick 15-min practice is enough to keep the flame alive. Ninnu loves your persistence!' : note.trim();
+
+                setIsSaving(true);
+                const taskData = {
+                    userId,
+                    dateKey: formatDateKey(selectedDate),
+                    taskName: finalTaskName,
+                    petName: finalPetName,
+                    note: finalNote,
+                    isComplete: false,
+                    isStreakTask: isStreakTask,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(), 
+                };
+
+                try {
+                    await db.collection(tasksCollectionPath).add(taskData);
+                    onSave(true); 
+                    onClose();
+                } catch (error) {
+                    console.error("Error adding task:", error);
+                } finally {
+                    setIsSaving(false);
+                }
+            };
+
+            const handleMarkCareDay = async (isNinnuDay, petNameTag) => {
+                setIsSaving(true);
+
+                let sticker = SPECIAL_AVATARS.CARE_DAY_HIM;
+                let name = "Sugi's Special Care Day";
+                let noteText = "Time for some self-care, Handsome! Ninnu is here for cuddles.";
+
+                if (isNinnuDay) {
+                    sticker = SPECIAL_AVATARS.CARE_DAY_ME;
+                    name = "Ninnu's Care Day";
+                    noteText = "Ninnu needs extra cuddles and snacks today. Be her sweetheart!";
+                    
+                    const dayOfMonth = selectedDate.getDate();
+                    const isPrime = (num) => {
+                        for(let i = 2; i < num; i++) if(num % i === 0) return false;
+                        return num > 1;
+                    }
+                    if (isPrime(dayOfMonth) && dayOfMonth > 1) { 
+                        sticker = SPECIAL_AVATARS.CARE_DAY_OVULATION;
+                        noteText = "Daddy duties activated! Time to be super supportive, my love! (Or just extra sweet!)";
+                    }
+                }
+
+                const careTask = {
+                    userId,
+                    dateKey: formatDateKey(selectedDate),
+                    taskName: `${name} ${sticker}`,
+                    petName: petNameTag,
+                    note: noteText,
+                    isComplete: false,
+                    isCareDay: true,
+                    careDaySticker: sticker,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                };
+
+                try {
+                    await db.collection(tasksCollectionPath).add(careTask);
+                    onSave(true);
+                    onClose();
+                } catch (error) {
+                    console.error("Error marking care day:", error);
+                } finally {
+                    setIsSaving(false);
+                }
+            };
+
+            if (!isVisible) return null;
+
+            return (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white p-6 rounded-3xl shadow-2xl max-w-md w-full border-4 border-pink-300 transform transition-transform animate-pop-in">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-2xl font-bold text-pink-600 font-stylish">Add Task for {formatDay(selectedDate)}</h2>
+                            <button onClick={onClose} className="text-gray-400 hover:text-red-500 transition text-2xl font-bold">{SPECIAL_AVATARS.X}</button>
+                        </div>
+
+                        <div className="space-y-4">
+                            
+                            <button
+                                onClick={() => setIsCareDayOptionsVisible(!isCareDayOptionsVisible)}
+                                className="w-full bg-pink-400 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-pink-500 transition transform hover:scale-[1.01] font-readable flex items-center justify-center gap-2"
+                            >
+                                <span className="text-lg">{SPECIAL_AVATARS.HEART}</span> Mark Care Day
+                            </button>
+
+                            {isCareDayOptionsVisible && (
+                                <div className="flex gap-4 p-3 bg-pink-100 rounded-xl shadow-inner animate-pop-in">
+                                    <button
+                                        onClick={() => handleMarkCareDay(false, 'Handsome')}
+                                        className="flex-1 bg-blue-400 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-blue-500 transition transform hover:scale-[1.01] font-readable text-sm flex items-center justify-center gap-2"
+                                    >
+                                        <span className="text-lg">{SPECIAL_AVATARS.USER_CHECK}</span> Mark Sugi's Day
+                                    </button>
+                                    <button
+                                        onClick={() => handleMarkCareDay(true, 'Sugi')}
+                                        className="flex-1 bg-red-400 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-red-500 transition transform hover:scale-[1.01] font-readable text-sm flex items-center justify-center gap-2"
+                                    >
+                                        <span className="text-lg">{SPECIAL_AVATARS.HEART}</span> Mark Ninnu's Day
+                                    </button>
+                                </div>
+                            )}
+
+                            <div className="text-center my-4 text-gray-400 font-readable">--- OR QUICK ADD / CUSTOM TASK ---</div>
+
+                            <button
+                                onClick={() => handleSaveTask(true)}
+                                disabled={isSaving}
+                                className="w-full bg-yellow-400 text-purple-900 font-bold py-3 rounded-xl shadow-lg hover:bg-yellow-500 transition transform hover:scale-[1.01] disabled:opacity-50 font-readable tracking-wider flex items-center justify-center gap-2"
+                            >
+                                <span className="text-lg">{SPECIAL_AVATARS.CODE}</span> <span className="text-lg">{SPECIAL_AVATARS.FLAME}</span> Add CODE STREAK
+                            </button>
+
+                            <div>
+                                <label className="block text-sm font-medium text-purple-700 font-readable mb-1">Task / Event (Tag: Handsome):</label>
+                                <input
+                                    type="text"
+                                    value={taskName}
+                                    onChange={(e) => setTaskName(e.target.value)}
+                                    placeholder="e.g., Fix the CSS bug"
+                                    className="w-full p-3 border-2 border-pink-200 rounded-xl focus:ring-pink-500 focus:border-pink-500 transition font-readable"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-purple-700 font-readable mb-1">Notes (Optional):</label>
+                                <textarea
+                                    value={note}
+                                    onChange={(e) => setNote(e.target.value)}
+                                    placeholder="Any details, context, or love notes..."
+                                    rows="2"
+                                    className="w-full p-3 border-2 border-pink-200 rounded-xl focus:ring-pink-500 focus:border-pink-500 transition font-readable"
+                                />
+                            </div>
+
+                            <button
+                                onClick={() => handleSaveTask(false)}
+                                disabled={isSaving || !taskName.trim()}
+                                className="w-full bg-purple-500 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-purple-600 transition transform hover:scale-[1.01] disabled:opacity-50 font-readable tracking-wider"
+                            >
+                                {isSaving ? 'Saving...' : 'Save Custom Task'}
+                            </button>
+
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AvatarChooserModal = ({ isVisible, onClose, onSelect, currentAvatarId }) => {
+            if (!isVisible) return null;
+
+            return (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white p-6 rounded-3xl shadow-2xl max-w-lg w-full border-4 border-pink-300 transform transition-transform animate-pop-in">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-2xl font-bold text-pink-600 font-stylish">Choose Your Calendar Buddy</h2>
+                            <button onClick={onClose} className="text-gray-400 hover:text-red-500 transition text-2xl font-bold">{SPECIAL_AVATARS.X}</button>
+                        </div>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-4 max-h-96 overflow-y-auto p-2">
+                            {AVATAR_OPTIONS.map(avatar => (
+                                <div
+                                    key={avatar.id}
+                                    onClick={() => { onSelect(avatar.id); onClose(); }}
+                                    className={`p-4 rounded-xl text-center cursor-pointer transition transform hover:scale-105 shadow-md ${currentAvatarId === avatar.id ? 'bg-purple-300 border-4 border-pink-500' : 'bg-pink-100 hover:bg-pink-200'}`}
+                                >
+                                    <div className="text-5xl">{avatar.emoji}</div>
+                                    <p className="text-sm font-readable mt-1 text-gray-700">{avatar.name}</p>
+                                    <p className="text-xs italic font-readable text-gray-500">({avatar.expression})</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+        
+        const DateCell = ({ date, month, year, selectedDate, dayTasks, currentBuddy, handleDateClick, isHoliday, personalDate, onSpecialDayClick }) => {
+            const dateRef = useRef(null);
+            const dateObj = new Date(year, month, date);
+            const dateKey = formatDateKey(dateObj);
+            const isSelected = dateObj.toDateString() === selectedDate.toDateString();
+            const isToday = dateObj.toDateString() === getToday().toDateString();
+
+            let specialSticker = '';
+            if (personalDate) {
+                if (personalDate.name.includes('Anniversary')) specialSticker = SPECIAL_AVATARS.ANNIVERSARY;
+                else if (personalDate.name.includes('Ninnu’s Birthday')) specialSticker = SPECIAL_AVATARS.BIRTHDAY_ME;
+                else if (personalDate.name.includes("Sugi's Birthday")) specialSticker = SPECIAL_AVATARS.BIRTHDAY_HIM;
+                else if (personalDate.name.includes('Kiss')) specialSticker = SPECIAL_AVATARS.KISS;
+            }
+            if (dayTasks.some(t => t.isCareDay && t.careDaySticker === SPECIAL_AVATARS.CARE_DAY_ME)) specialSticker = SPECIAL_AVATARS.CARE_DAY_ME;
+            if (dayTasks.some(t => t.isCareDay && t.careDaySticker === SPECIAL_AVATARS.CARE_DAY_HIM)) specialSticker = SPECIAL_AVATARS.CARE_DAY_HIM;
+            if (dayTasks.some(t => t.isCareDay && t.careDaySticker === SPECIAL_AVATARS.CARE_DAY_OVULATION)) specialSticker = SPECIAL_AVATARS.CARE_DAY_OVULATION;
+            if (dayTasks.some(t => t.isStreakTask)) specialSticker = specialSticker || SPECIAL_AVATARS.STREAK_HINT;
+
+            const isSpecialDate = !!personalDate || dayTasks.some(t => t.isCareDay);
+
+            const avatarEmoji = specialSticker && specialSticker !== SPECIAL_AVATARS.CARE_DAY_ME && specialSticker !== SPECIAL_AVATARS.CARE_DAY_HIM ? specialSticker : currentBuddy.emoji;
+
+            const getAvatarAnimation = () => {
+                if (specialSticker === SPECIAL_AVATARS.CARE_DAY_OVULATION) return 'animate-wiggle';
+                if (specialSticker === SPECIAL_AVATARS.BIRTHDAY_HIM) return 'animate-bounce-slow';
+                if (specialSticker === SPECIAL_AVATARS.STREAK_HINT) return 'animate-wiggle';
+                return 'animate-wobble';
+            }
+
+            const getTooltipText = () => {
+                if (personalDate) return personalDate.name;
+                if (isHoliday) return HOLIDAYS.find(h => h.month === month && h.date === date)?.name;
+                if (dayTasks.length > 0) return dayTasks.map(t => t.taskName.replace(/\*\*/g, '')).join(' | '); 
+                return MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)];
+            }
+
+            return (
+                <div
+                    ref={dateRef}
+                    key={dateKey}
+                    className={`
+                        p-1 sm:p-2 aspect-square flex flex-col items-center justify-center 
+                        rounded-xl transition duration-200 cursor-pointer relative group/day
+                        ${isSelected ? 'bg-purple-300 ring-4 ring-purple-500 shadow-lg z-10' :
+                        isToday ? 'bg-pink-200 hover:bg-pink-300' :
+                        isHoliday ? 'bg-green-100/70 hover:bg-green-200' :
+                        'bg-white/90 hover:bg-pink-100'}
+                    `}
+                    onClick={(e) => {
+                        handleDateClick(year, month, date);
+                        if (isSpecialDate) onSpecialDayClick(e.currentTarget); // Trigger confetti on click for any special date
+                    }}
+                >
+                    <span className={`text-lg sm:text-xl font-extrabold font-readable ${isHoliday ? 'text-green-700' : 'text-purple-800'}`}>
+                        {date}
+                    </span>
+
+                    {/* Sticker/Special Day Icon */}
+                    {specialSticker && (
+                        <span className={`absolute top-0 right-0 text-lg transform translate-x-1 -translate-y-1 ${specialSticker === SPECIAL_AVATARS.STREAK_HINT ? 'text-yellow-500' : ''}`}>
+                            {specialSticker === SPECIAL_AVATARS.CARE_DAY_ME || specialSticker === SPECIAL_AVATARS.CARE_DAY_HIM || specialSticker === SPECIAL_AVATARS.CARE_DAY_OVULATION ? '' : specialSticker}
+                        </span>
+                    )}
+
+                    {/* Task Count Indicator */}
+                    {dayTasks.length > 0 && (
+                        <div className={`absolute bottom-1 right-1 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center ring-1 ring-white ${dayTasks.some(t => t.isStreakTask) ? 'bg-yellow-500' : dayTasks.some(t => t.isCareDay) ? 'bg-red-500' : 'bg-purple-400'}`}>
+                            {dayTasks.length}
+                        </div>
+                    )}
+
+                    {/* Calendar Buddy / Selected Day Icon */}
+                    {isSelected && (
+                        <div className={`absolute -top-3 sm:-top-4 text-4xl transform ${getAvatarAnimation()}`}>
+                            {avatarEmoji}
+                        </div>
+                    )}
+                    
+                    {/* Motivational Tooltip on Hover */}
+                    <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 z-30 opacity-0 group-hover/day:opacity-100 transition-opacity duration-300 pointer-events-none w-max max-w-[150px]">
+                        <div className={`bg-pink-600 text-white text-xs p-2 rounded-lg shadow-xl font-readable text-center border-2 border-pink-800 animate-pop-in ${isSelected ? 'mt-8' : ''}`}>
+                            {getTooltipText()}
+                        </div>
+                        <div className="absolute left-1/2 -top-1 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-pink-600"></div>
+                    </div>
+                </div>
+            );
+        }
+
+        const App = () => {
+            const [db, setDb] = useState(null);
+            const [userId, setUserId] = useState(null);
+            const [isAuthReady, setIsAuthReady] = useState(false);
+            const [loadingError, setLoadingError] = useState(null);
+            const [isAppReady, setIsAppReady] = useState(false);
+            const [showConfetti, setShowConfetti] = useState(false);
+
+
+            const [currentDate, setCurrentDate] = useState(getInitialSelectedDate());
+            const [selectedDate, setSelectedDate] = useState(getInitialSelectedDate());
+            const [tasks, setTasks] = useState({});
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [isAvatarChooserOpen, setIsAvatarChooserOpen] = useState(false);
+            const [calendarBuddyId, setCalendarBuddyId] = useState(AVATAR_OPTIONS.find(a => a.id === 'cat-pink').id);
+            const [initialSpecialDate, setInitialSpecialDate] = useState(null);
+
+            const tasksCollectionPath = useMemo(() => {
+                if (!userId) return null;
+                return `artifacts/${appId}/users/${userId}/sugi_tasks`;
+            }, [userId]);
+
+            // 1. Firebase Initialization and Authentication
+            useEffect(() => {
+                if (!firebaseConfig.apiKey) {
+                    setLoadingError("Firebase config is missing or incomplete. Cannot initialize database.");
+                    return;
+                }
+                try {
+                    const app = firebase.initializeApp(firebaseConfig);
+                    const firestore = firebase.firestore();
+                    const authInstance = firebase.auth();
+                    setDb(firestore);
+
+                    // 1. Handle Authentication
+                    const authUnsubscribe = authInstance.onAuthStateChanged(async (user) => {
+                        let currentUserId = user ? user.uid : null;
+
+                        if (!user) {
+                            const anonUser = await authInstance.signInAnonymously();
+                            currentUserId = anonUser.user.uid;
+                        }
+                        
+                        setUserId(currentUserId);
+                        setIsAuthReady(true);
+                    });
+
+                    // 2. Load Preferences
+                    const loadPreferences = async (uid) => {
+                        if (!uid) return;
+                        try {
+                            const prefRef = firestore.doc(`artifacts/${appId}/users/${uid}/preferences/buddy_config`); 
+                            const prefSnap = await prefRef.get();
+                            if (prefSnap.exists()) {
+                                setCalendarBuddyId(prefSnap.data().calendarBuddyId || AVATAR_OPTIONS.find(a => a.id === 'cat-pink').id);
+                            }
+                        } catch (e) {
+                            console.warn("Could not load preferences:", e);
+                        }
+                    };
+
+                    const prefUnsubscribe = authInstance.onAuthStateChanged((user) => {
+                        if (user) {
+                            loadPreferences(user.uid);
+                        }
+                    });
+
+                    // Set up initial greeting state check
+                    setInitialSpecialDate(isTodayASpecialDate(getToday()));
+
+
+                    return () => { authUnsubscribe(); prefUnsubscribe(); };
+                } catch (e) {
+                    console.error("Firebase Initialization Error:", e);
+                    setLoadingError(`Initialization Error: ${e.message}`);
+                }
+            }, []);
+
+            // 3. Task Listener (Realtime Updates)
+            useEffect(() => {
+                if (!db || !isAuthReady || !tasksCollectionPath || !userId) return;
+
+                const tasksQuery = db.collection(tasksCollectionPath);
+
+                const unsubscribe = tasksQuery.onSnapshot((snapshot) => {
+                    const newTasks = {};
+                    snapshot.docs.forEach(doc => {
+                        const task = doc.data();
+                        task.id = doc.id;
+                        const dateKey = task.dateKey;
+                        if (!newTasks[dateKey]) {
+                            newTasks[dateKey] = [];
+                        }
+                        newTasks[dateKey].push(task);
+                    });
+                    setTasks(newTasks);
+                }, (error) => {
+                    console.error("Firestore Snapshot Error:", error);
+                    setLoadingError(`Database Error: ${error.message}`);
+                });
+
+                return () => unsubscribe();
+            }, [db, isAuthReady, tasksCollectionPath, userId]);
+
+            // --- HANDLERS ---
+            const savePreference = useCallback(async (newBuddyId) => {
+                if (!db || !userId) return;
+                try {
+                    setCalendarBuddyId(newBuddyId); 
+                    const prefRef = db.doc(`artifacts/${appId}/users/${userId}/preferences/buddy_config`); 
+                    await prefRef.set({ calendarBuddyId: newBuddyId }, { merge: true });
+                } catch (e) {
+                    console.error("Error saving preference:", e);
+                }
+            }, [db, userId]);
+
+            const handleDateClick = (year, month, date) => {
+                const newDate = new Date(year, month, date);
+                setSelectedDate(newDate);
+            };
+
+            const handleSpecialDayClick = (targetElement) => {
+                generateConfetti(30, targetElement);
+            }
+
+            const changeMonth = (delta) => {
+                setCurrentDate(prev => {
+                    const newDate = new Date(prev.getFullYear(), prev.getMonth() + delta, 1);
+                    return newDate;
+                });
+            };
+
+            const handleTaskComplete = useCallback(async (taskId) => {
+                if (!db || !tasksCollectionPath || !taskId) return;
+                
+                try {
+                    const taskRef = db.collection(tasksCollectionPath).doc(taskId);
+                    await taskRef.update({
+                        isComplete: true
+                    });
+                    setShowConfetti(true);
+                    setTimeout(() => setShowConfetti(false), 2000); // Hide confetti after 2 seconds
+                } catch (error) {
+                    console.error("Error updating task completion:", error);
+                }
+            }, [db, tasksCollectionPath]);
+
+            const handleTaskDelete = useCallback(async (taskId) => {
+                if (!db || !tasksCollectionPath || !taskId) return;
+                
+                try {
+                    await db.collection(tasksCollectionPath).doc(taskId).delete();
+                } catch (error) {
+                    console.error("Error deleting task:", error);
+                }
+            }, [db, tasksCollectionPath]);
+
+            const renderCalendar = () => {
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth();
+                const daysInMonth = getDaysInMonth(year, month);
+                const firstDay = getFirstDayOfMonth(year, month);
+
+                const calendarDays = [];
+                for (let i = 0; i < firstDay; i++) {
+                    calendarDays.push(<div key={`pad-${i}`} className="p-1"></div>);
+                }
+
+                const currentBuddy = AVATAR_OPTIONS.find(a => a.id === calendarBuddyId) || AVATAR_OPTIONS[0];
+
+                for (let day = 1; day <= daysInMonth; day++) {
+                    const date = new Date(year, month, day);
+                    const dateKey = formatDateKey(date);
+                    const dayTasks = tasks[dateKey] || [];
+                    
+                    const personalDate = PERSONAL_DATES.find(d => 
+                        d.month === month && 
+                        d.date === day &&
+                        (d.year === year || d.name.includes('Birthday') || d.name.includes('Anniversary') || d.name.includes('Kiss'))
+                    );
+                    const isHoliday = HOLIDAYS.some(h => h.month === month && h.date === day);
+
+                    calendarDays.push(
+                        <DateCell
+                            key={dateKey}
+                            date={day}
+                            month={month}
+                            year={year}
+                            selectedDate={selectedDate}
+                            dayTasks={dayTasks}
+                            currentBuddy={currentBuddy}
+                            handleDateClick={handleDateClick}
+                            isHoliday={isHoliday}
+                            personalDate={personalDate}
+                            onSpecialDayClick={handleSpecialDayClick}
+                        />
+                    );
+                }
+
+                return calendarDays;
+            };
+
+            // --- RENDER LOGIC ---
+
+            if (!isAppReady) {
+                // If it's Sugi's birthday, show the special screen first
+                if (initialSpecialDate && initialSpecialDate.type === 'sugi_bday') {
+                     return <SugiBirthdayScreen onContinue={() => setIsAppReady(true)} />;
+                }
+                
+                // Otherwise, show the general conversation screen (which handles other special dates)
+                return (
+                    <LoadingScreen loading={!isAuthReady || !userId} error={loadingError}>
+                        <DailyGreeting 
+                            onContinue={() => setIsAppReady(true)} 
+                            specialDateInfo={initialSpecialDate}
+                        />
+                    </LoadingScreen>
+                );
+            }
+            
+            const currentBuddy = AVATAR_OPTIONS.find(a => a.id === calendarBuddyId) || AVATAR_OPTIONS[0];
+            const tasksForSelectedDay = tasks[formatDateKey(selectedDate)] || [];
+
+            return (
+                <LoadingScreen loading={false} error={loadingError}>
+                    {showConfetti && <ConfettiOnSuccess show={showConfetti} />}
+                    <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-100 p-4 sm:p-8 relative overflow-hidden flex flex-col items-center">
+                        
+                        {/* Background Particles */}
+                        {Array(30).fill().map((_, i) => (
+                            <div
+                                key={i}
+                                className="absolute text-3xl opacity-60 pointer-events-none animate-float"
+                                style={{ 
+                                    left: `${Math.random() * 100}%`,
+                                    top: `${Math.random() * 100}%`,
+                                    fontSize: `${Math.random() * 2 + 1.5}rem`,
+                                    animationDuration: `${Math.random() * 10 + 5}s`, 
+                                    animationDelay: `-${Math.random() * 5}s`,
+                                    animationDirection: i % 2 === 0 ? 'reverse' : 'normal',
+                                    opacity: 0.5,
+                                }}
+                            >
+                                {MONTHLY_STICKERS[currentDate.getMonth()]}
+                            </div>
+                        ))}
+
+                        <div className="w-full max-w-4xl z-10 bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-4 sm:p-6 border-4 border-purple-300">
+                            <div className="flex justify-between items-center mb-6">
+                                <h1 className="text-4xl sm:text-5xl font-extrabold text-purple-700 font-stylish">
+                                    {currentBuddy.emoji} SUGI'S PLANNER
+                                </h1>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setIsAvatarChooserOpen(true)}
+                                        className="p-3 bg-pink-300 rounded-full text-purple-800 hover:bg-pink-400 transition shadow-md text-xl"
+                                        title="Change Calendar Buddy"
+                                    >
+                                        {SPECIAL_AVATARS.SETTINGS}
+                                    </button>
+                                    <button
+                                        onClick={() => setIsModalOpen(true)}
+                                        className="p-3 bg-purple-500 rounded-full text-white hover:bg-purple-600 transition shadow-md text-2xl font-bold"
+                                        title="Add Sugi's Task"
+                                    >
+                                        {SPECIAL_AVATARS.PLUS}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Month Navigation */}
+                            <div className="flex justify-between items-center bg-pink-100 p-3 rounded-xl mb-4 shadow-inner">
+                                <button onClick={() => changeMonth(-1)} className="p-2 text-purple-700 hover:bg-pink-300 rounded-full transition text-2xl">
+                                    {SPECIAL_AVATARS.CHEVRON_LEFT}
+                                </button>
+                                <h2 className="text-2xl font-bold text-purple-800 font-stylish">
+                                    {formatMonthYear(currentDate)}
+                                </h2>
+                                <button onClick={() => changeMonth(1)} className="p-2 text-purple-700 hover:bg-pink-300 rounded-full transition text-2xl">
+                                    {SPECIAL_AVATARS.CHEVRON_RIGHT}
+                                </button>
+                            </div>
+
+                            {/* Days of the Week */}
+                            <div className="grid grid-cols-7 text-center font-bold text-sm text-purple-500 mb-2 font-readable tracking-wider">
+                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                                    <span key={day} className="p-1">{day}</span>
+                                ))}
+                            </div>
+
+                            {/* Calendar Grid */}
+                            <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                                {renderCalendar()}
+                            </div>
+
+                            {/* Task List for Selected Day */}
+                            <div className="mt-6 p-4 bg-purple-50 rounded-xl border border-purple-200">
+                                <h3 className="text-xl font-bold text-purple-700 font-stylish mb-3 flex items-center gap-2">
+                                    <span className="text-xl">{SPECIAL_AVATARS.CALENDAR}</span>
+                                    Tasks for {selectedDate.toDateString()}
+                                </h3>
+                                {tasksForSelectedDay.length > 0 ? (
+                                    <ul className="space-y-2">
+                                        {tasksForSelectedDay.map(task => (
+                                            <li key={task.id} className={`p-3 rounded-lg shadow-md border ${task.isComplete ? 'opacity-50 line-through bg-green-50 border-green-300' : task.isCareDay ? 'bg-red-50 border-red-300' : task.isStreakTask ? 'bg-yellow-50 border-yellow-300' : 'bg-white border-pink-200'}`}>
+                                                <div className="flex items-start justify-between">
+                                                    <div className="flex flex-col flex-grow">
+                                                        <p className="font-readable text-lg text-gray-800 font-semibold">{task.taskName.replace(/\*\*/g, '')}</p>
+                                                        <p className="text-sm italic font-readable text-gray-500">
+                                                            ~ {task.petName}
+                                                        </p>
+                                                        {task.note && <p className="text-xs text-gray-500 mt-1 font-readable">{task.note.replace(/\*\*/g, '')}</p>}
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`text-2xl ${task.careDaySticker === SPECIAL_AVATARS.CARE_DAY_OVULATION || task.isStreakTask ? 'animate-wiggle' : ''}`}>
+                                                            {task.careDaySticker || (task.isStreakTask ? SPECIAL_AVATARS.STREAK_HINT : '⭐')}
+                                                        </span>
+                                                        <button 
+                                                            onClick={() => handleTaskComplete(task.id)} 
+                                                            disabled={task.isComplete}
+                                                            className={`text-xl p-1 rounded-full transition ${task.isComplete ? 'text-green-500' : 'text-gray-400 hover:text-green-500'}`}
+                                                            title="Mark Complete"
+                                                        >
+                                                            {SPECIAL_AVATARS.CHECK}
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleTaskDelete(task.id)} 
+                                                            className="text-xl p-1 rounded-full text-gray-400 hover:text-red-500 transition"
+                                                            title="Delete Task"
+                                                        >
+                                                            {SPECIAL_AVATARS.X}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-gray-500 font-readable italic text-center py-4">
+                                        No tasks for today! Maybe add a cute date plan?
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+
+                        <TaskModal
+                            isVisible={isModalOpen}
+                            onClose={() => setIsModalOpen(false)}
+                            onSave={() => console.log('Task saved!')} // Refetching handled by snapshot listener
+                            selectedDate={selectedDate}
+                            userId={userId}
+                            db={db}
+                            tasksCollectionPath={tasksCollectionPath}
+                        />
+                        <AvatarChooserModal
+                            isVisible={isAvatarChooserOpen}
+                            onClose={() => setIsAvatarChooserOpen(false)}
+                            onSelect={savePreference}
+                            currentAvatarId={calendarBuddyId}
+                        />
+                    </div>
+                </LoadingScreen>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+
+        // --- PWA Service Worker Registration (Requires sw.js file) ---
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+              .then(registration => {
+                console.log('SW registered:', registration);
+              })
+              .catch(error => {
+                console.error('SW registration failed:', error);
+              });
+          });
+        }
+        // --- END PWA REGISTRATION ---
+    </script>
+</body>
+</html>

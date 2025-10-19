@@ -1,0 +1,21 @@
+{
+  "name": "Sugi's Personalized Planner",
+  "short_name": "Sugi Planner",
+  "description": "A heartfelt, customized planner for Sugi.",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#fbcfe8",
+  "theme_color": "#7e22ce",
+  "icons": [
+    {
+      "src": "https://placehold.co/192x192/f0abfc/7e22ce?text=👑",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://placehold.co/512x512/f0abfc/7e22ce?text=👑",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

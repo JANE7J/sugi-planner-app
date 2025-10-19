@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // This rule ensures a user can only read or write data where the userId in the path
+    // matches their authenticated ID. This keeps Sugi's data private.
+    match /artifacts/{appId}/users/{userId}/{document=**} {
+      allow read, write: if request.auth.uid == userId;
+    }
+  }
+}
