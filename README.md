@@ -1,6 +1,4 @@
-That's a smart final step\! A **`README.md`** file makes your repository look professional, explains the project's purpose, and provides instructions for anyone viewing the code.
 
-Here is a concise, slightly professional, and heartfelt README file you can add to your `sugi-planner-app` repository.
 
 -----
 
